@@ -1,0 +1,5 @@
+run/
+log.txt
+fpga_board_selection
+*.bak
+.venv
