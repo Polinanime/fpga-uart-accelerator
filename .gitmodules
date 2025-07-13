@@ -1,0 +1,6 @@
+[submodule "HardFloat"]
+	path = HardFloat
+	url = https://github.com/drom/HardFloat.git
+[submodule "FPGA-UART"]
+	path = FPGA-UART
+	url = https://github.com/WangXuan95/FPGA-UART.git

@@ -412,6 +412,8 @@ setup_run_directory_for_fpga_synthesis_quartus ()
     rel_board_dir=$(realpath    --relative-to="$dir" "$board_dir")
     rel_lab_dir=$(realpath      --relative-to="$dir" "$lab_dir")
 
+    rel_uart_dir=$(realpath         --relative-to="$dir" "$uart_dir")
+
     #-------------------------------------------------------------------------
 
     > "$dir/fpga_project.qpf"
@@ -424,6 +426,7 @@ set_global_assignment -name SDC_FILE                 $rel_board_dir/$fpga_board/
 set_global_assignment -name SEARCH_PATH $rel_main_src_dir
 set_global_assignment -name SEARCH_PATH $rel_board_dir/$fpga_board
 set_global_assignment -name SEARCH_PATH $rel_lab_dir/common
+set_global_assignment -name SEARCH_PATH $rel_uart_dir/RTL
 
 EOF
 

@@ -10,6 +10,7 @@ if false && is_command_available iverilog
 then
     iverilog -g2005-sv \
          -I ..      -I "$lab_dir/common" \
+         -I "$lab_dir/../../FPGA-UART/RTL" \
             ../*.sv    "$lab_dir/common"/*.sv \
         |& tee "$log"
 
@@ -32,3 +33,4 @@ case $fpga_toolchain in
 esac
 
 . "$script_dir/steps/04_configure_fpga.source_bash"
+

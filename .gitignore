@@ -3,3 +3,11 @@ log.txt
 fpga_board_selection
 *.bak
 .venv
+fpga/labs/common/uart_rx.v
+fpga/labs/common/uart_tx.v
+fpga/labs/common/uart2axi4.v
+fpga/labs/sim/tb_axis_inc_source.v
+fpga/labs/sim/tb_uart.v
+fpga/labs/sim/tb_uart2axi4.v
+cvfpu
+sv2v

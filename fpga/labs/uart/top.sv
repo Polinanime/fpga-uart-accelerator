@@ -10,7 +10,8 @@ module top
               w_gpio     = 100,
     parameter BAUD_RATE  = 115200,
     parameter FIFO_EA    = 2,
-    parameter BYTE_WIDTH = 1
+    parameter BYTE_WIDTH = 1,
+    parameter EOF_SYMB   = 126     // tilde symbol in ascii
 )
 (
     input                        clk,
@@ -63,16 +64,49 @@ module top
 
     //------------------------------------------------------------------------
 
-    logic  [15:0           ]  cnt;
-    wire                      rx_ready;
-    wire                      rx_valid;
-    wire                      rx_data;
-    wire                      rx_overflow;
-    wire                      tx_ready;
-    wire                      tx_valid;
-    wire  [8*BYTE_WIDTH-1:0 ] tx_data;
-    wire  [  BYTE_WIDTH-1:0 ] tx_keep;
-    wire                      tx_last;
+    // FSM 
+    typedef enum bit [2:0] 
+    {
+        read_op   = 3'd0, 
+        read_a    = 3'd1,
+        read_b    = 3'd2,
+        calculate = 3'd3,
+        send_res  = 3'd4
+    }
+    fsm_state; 
+
+    fsm_state state, next_state;
+    logic fsm_en; 
+
+    always_ff @ ( posedge clk or posedge rst)
+    begin
+        if ( rst )
+            state <= read_op;
+        else if ( fsm_en )
+            state <= next_state;
+    end
+
+
+    // UART 
+    logic [15:0             ] cnt;
+    logic                     rx_ready;
+    logic                     rx_valid;
+    logic                     rx_data;
+    logic                     rx_overflow;
+    logic                     rx_symbol;
+    logic                     tx_ready;
+    logic                     tx_valid;
+    logic [8*BYTE_WIDTH-1:0 ] tx_data;
+    logic [  BYTE_WIDTH-1:0 ] tx_keep;
+    logic                     tx_last;
+
+    // FPU
+    logic [8*BYTE_WIDTH-1:0 ] fpu_a;
+    logic [8*BYTE_WIDTH-1:0 ] fpu_b;
+    logic [8*BYTE_WIDTH-1:0 ] fpu_op;
+    logic [8*BYTE_WIDTH-1:0 ] fpu_res;
+    logic                     fpu_valid;
+    logic                     fpu_ready;
 
     // Some test data to send
     assign tx_data = 'd31;
@@ -88,7 +122,7 @@ module top
           .o_tready   ( rx_ready    ),
           .o_tvalid   ( rx_valid    ),
           .o_tdata    ( rx_data     ),
-          .o_overflow ( rx_overflow    )
+          .o_overflow ( rx_overflow )
     );
 
     // Uart send
@@ -126,6 +160,23 @@ module top
     // Show info on leds
     assign led[2:0] = cnt[7:5];
     assign led[3]   = rx_overflow;
+
+
+    // rx fsm logic:
+    // Read op -> read a -> read b -> wait fpu to complete -> send res
+    always_comb 
+    begin
+        next_state = state;
+
+        case (state)
+        read_op:   if (rx_symbol == EOF_SYMB) next_state = read_a;
+        read_a:    if (rx_symbol == EOF_SYMB) next_state = read_b;
+        read_b:    if (rx_symbol == EOF_SYMB) next_state = calculate;
+        calculate: if (     fpu_valid       ) next_state = send_res;
+        send_res:  if (     rx_ready        ) next_state = read_op;
+        endcase
+
+    end
     
 
 
