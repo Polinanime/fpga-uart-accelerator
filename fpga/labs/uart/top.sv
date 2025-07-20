@@ -9,9 +9,11 @@ module top
               w_digit    = 8,
               w_gpio     = 100,
     parameter BAUD_RATE  = 115200,
-    parameter FIFO_EA    = 2,
+    parameter FIFO_EA    = 4,
     parameter BYTE_WIDTH = 1,
-    parameter EOF_SYMB   = 126     // tilde symbol in ascii
+    parameter SYMB_START   = "<",
+    parameter SYMB_DELIM   = "|",
+    parameter SYMB_END     = ">"
 )
 (
     input                        clk,
@@ -67,11 +69,12 @@ module top
     // FSM 
     typedef enum bit [2:0] 
     {
-        read_op   = 3'd0, 
-        read_a    = 3'd1,
-        read_b    = 3'd2,
-        calculate = 3'd3,
-        send_res  = 3'd4
+        idle      = 3'd0,
+        read_op   = 3'd1, 
+        read_a    = 3'd2,
+        read_b    = 3'd3,
+        calculate = 3'd4,
+        send_res  = 3'd5
     }
     fsm_state; 
 
@@ -91,7 +94,7 @@ module top
     logic [15:0             ] cnt;
     logic                     rx_ready;
     logic                     rx_valid;
-    logic                     rx_data;
+    logic [ 7:0]              rx_data;
     logic                     rx_overflow;
     logic                     rx_symbol;
     logic                     tx_ready;
@@ -103,8 +106,8 @@ module top
     // FPU
     logic [8*BYTE_WIDTH-1:0 ] fpu_a;
     logic [8*BYTE_WIDTH-1:0 ] fpu_b;
-    logic [8*BYTE_WIDTH-1:0 ] fpu_op;
     logic [8*BYTE_WIDTH-1:0 ] fpu_res;
+    logic [7:0 ] fpu_op;
     logic                     fpu_valid;
     logic                     fpu_ready;
 
@@ -119,7 +122,7 @@ module top
           .rstn       ( ~rst        ),
           .clk        ( clk         ),
           .i_uart_rx  ( uart_rx     ),
-          .o_tready   ( rx_ready    ),
+          .o_tready   ( tx_ready    ),
           .o_tvalid   ( rx_valid    ),
           .o_tdata    ( rx_data     ),
           .o_overflow ( rx_overflow )
@@ -129,54 +132,80 @@ module top
     uart_tx # (
         .BAUD_RATE  ( BAUD_RATE  ),
         .FIFO_EA    ( FIFO_EA    ),
-        .BYTE_WIDTH ( BYTE_WIDTH ))
+        .BYTE_WIDTH ( BYTE_WIDTH + 3 ),
+        .STOP_BITS  ( 1          ))
     tx (
         .rstn       ( ~rst      ),
         .clk        ( clk       ),
         .i_tready   ( tx_ready  ),
-        .i_tvalid   ( tx_valid  ),
-        .i_tdata    ( tx_data   ),
-        .i_tkeep    ( tx_keep   ),
+        .i_tvalid   ( rx_valid ),
+        .i_tdata    ( {"-", rx_data, "-\n"}),
+        .i_tkeep    ( 4'('1)   ),
+        .i_tlast    ( '1   ),
         .o_uart_tx  ( uart_tx   )
     );
     
     //------------------------------------------------------------------------
+
+    
+
+    seven_segment_display
+    # (
+        .w_digit   ( w_digit ),
+        .clk_mhz   ( clk_mhz ),
+        .update_hz ( 4 ) // Looks like a sane default
+    )
+    (
+        .clk ( clk ),
+        .rst ( rst ),
+
+        .number(cnt),
+        .dots('0),
+        .abcdefgh(abcdefgh),
+        .digit(digit)
+    );
+
+// 
 
 
     always_ff @( posedge clk or posedge rst ) 
     begin
         if ( rst )
             cnt <= '0;
-        else if (rx_valid)
+        else if (rx_valid & tx_ready)
             cnt <= cnt + 1'd1;
     end
 
-    // Manipulate tx
-    assign tx_valid = tx_ready & sw[0];
+    // // Manipulate tx
+    // assign tx_valid = tx_ready & sw[0];
     
-    // Manipulate rx
-    assign rx_ready = sw[1];
+    // // Manipulate rx
+    // assign rx_ready = sw[1];
     
-    // Show info on leds
-    assign led[2:0] = cnt[7:5];
-    assign led[3]   = rx_overflow;
+    // // Show info on leds
+    // assign led[2:0] = cnt[7:5];
+    // assign led[3]   = rx_overflow;
 
 
-    // rx fsm logic:
-    // Read op -> read a -> read b -> wait fpu to complete -> send res
-    always_comb 
-    begin
-        next_state = state;
+    // // rx fsm logic:
+    // // Read op -> read a -> read b -> wait fpu to complete -> send res
+    // always_comb 
+    // begin
+    //     next_state = state;
 
-        case (state)
-        read_op:   if (rx_symbol == EOF_SYMB) next_state = read_a;
-        read_a:    if (rx_symbol == EOF_SYMB) next_state = read_b;
-        read_b:    if (rx_symbol == EOF_SYMB) next_state = calculate;
-        calculate: if (     fpu_valid       ) next_state = send_res;
-        send_res:  if (     rx_ready        ) next_state = read_op;
-        endcase
 
-    end
+
+
+    //     case (state)
+    //     idle:      if (rx_data == SYMB_START)
+    //     read_op:   if (rx_data == SYMB_DELIM) next_state = read_a;
+    //     read_a:    if (rx_data == SYMB_DELIM) next_state = read_b;
+    //     read_b:    if (rx_data == SYMB_END)   next_state = calculate;
+    //     calculate: if (     fpu_valid       ) next_state = send_res;
+    //     send_res:  if (     rx_ready        ) next_state = idle;
+    //     endcase
+
+    // end
     
 
 
