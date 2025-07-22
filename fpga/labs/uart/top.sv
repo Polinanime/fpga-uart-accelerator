@@ -11,9 +11,14 @@ module top
     parameter BAUD_RATE  = 115200,
     parameter FIFO_EA    = 4,
     parameter BYTE_WIDTH = 1,
-    parameter SYMB_START   = "<",
-    parameter SYMB_DELIM   = "|",
-    parameter SYMB_END     = ">"
+    parameter SYMB_START = "<",
+    parameter SYMB_DELIM = "|",
+    parameter SYMB_END   = ">",
+    parameter expWidth   = 8,
+    parameter sigWidth   = 24,
+    parameter FLOAT_SIZE = expWidth + sigWidth,
+    parameter VAR_WIDTH  = FLOAT_SIZE / (BYTE_WIDTH * 8),
+    parameter VAR_LENG   = FLOAT_SIZE / VAR_WIDTH
 )
 (
     input                        clk,
@@ -103,13 +108,16 @@ module top
     logic [  BYTE_WIDTH-1:0 ] tx_keep;
     logic                     tx_last;
 
+    logic                     read_cnt; // TODO: calculate real size
+
     // FPU
-    logic [8*BYTE_WIDTH-1:0 ] fpu_a;
-    logic [8*BYTE_WIDTH-1:0 ] fpu_b;
-    logic [8*BYTE_WIDTH-1:0 ] fpu_res;
-    logic [7:0 ] fpu_op;
-    logic                     fpu_valid;
-    logic                     fpu_ready;
+    logic [FLOAT_SIZE-1:0           ] fpu_a;
+    logic [FLOAT_SIZE-1:0           ] fpu_b;
+    logic [  FLOAT_SIZE-1:0         ] fpu_res;
+    logic [  BYTE_WIDTH:0           ] fpu_op;
+    logic                             fpu_valid;
+    logic                             fpu_ready;
+    logic [  7:0                    ] fpu_flags;
 
     // Some test data to send
     assign tx_data = 'd31;
@@ -119,13 +127,13 @@ module top
         .BAUD_RATE  (BAUD_RATE  ),
         .FIFO_EA    (FIFO_EA    ))
     rx (
-          .rstn       ( ~rst        ),
-          .clk        ( clk         ),
-          .i_uart_rx  ( uart_rx     ),
-          .o_tready   ( tx_ready    ),
-          .o_tvalid   ( rx_valid    ),
-          .o_tdata    ( rx_data     ),
-          .o_overflow ( rx_overflow )
+        .rstn       ( ~rst        ),
+        .clk        ( clk         ),
+        .i_uart_rx  ( uart_rx     ),
+        .o_tready   ( tx_ready    ),
+        .o_tvalid   ( rx_valid    ),
+        .o_tdata    ( rx_data     ),
+        .o_overflow ( rx_overflow )
     );
 
     // Uart send
@@ -133,21 +141,19 @@ module top
         .BAUD_RATE  ( BAUD_RATE  ),
         .FIFO_EA    ( FIFO_EA    ),
         .BYTE_WIDTH ( BYTE_WIDTH + 3 ),
-        .STOP_BITS  ( 1          ))
-    tx (
+        .STOP_BITS  ( 1          )
+    ) tx (
         .rstn       ( ~rst      ),
         .clk        ( clk       ),
         .i_tready   ( tx_ready  ),
-        .i_tvalid   ( rx_valid ),
+        .i_tvalid   ( rx_valid  ),
         .i_tdata    ( {"-", rx_data, "-\n"}),
-        .i_tkeep    ( 4'('1)   ),
-        .i_tlast    ( '1   ),
+        .i_tkeep    ( 4'('1)    ),
+        .i_tlast    ( '1        ),
         .o_uart_tx  ( uart_tx   )
     );
     
     //------------------------------------------------------------------------
-
-    
 
     seven_segment_display
     # (
@@ -165,8 +171,7 @@ module top
         .digit(digit)
     );
 
-// 
-
+    //------------------------------------------------------------------------
 
     always_ff @( posedge clk or posedge rst ) 
     begin
@@ -176,36 +181,75 @@ module top
             cnt <= cnt + 1'd1;
     end
 
-    // // Manipulate tx
-    // assign tx_valid = tx_ready & sw[0];
-    
-    // // Manipulate rx
-    // assign rx_ready = sw[1];
-    
-    // // Show info on leds
-    // assign led[2:0] = cnt[7:5];
-    // assign led[3]   = rx_overflow;
+    //------------------------------------------------------------------------
+
+    // Read numbers
+
+    always_ff @( posedge clk or posedge rst ) 
+    begin
+        if ( rst )
+        begin
+            fpu_a <= '0;
+            fpu_b <= '0;
+            fpu_op <= '0;
+        end
+        else if (rx_valid)
+        begin
+            if ( state == read_a)
+            begin
+              fpu_a[(read_cnt+1)*8:read_cnt] <= rx_data;
+              read_cnt <= read_cnt + 1'd1;
+            end
+            else if ( state == read_b  )
+            begin
+              fpu_b[(read_cnt+1)*8:read_cnt] <= rx_data;
+              read_cnt <= read_cnt + 1'd1;
+            end
+            else if ( state == read_op )
+            begin
+              fpu_op[(read_cnt+1)*8:read_cnt] <= rx_data;
+              read_cnt <= read_cnt + 1'd1;
+            end
+        end
+    end
+
+    //------------------------------------------------------------------------
+    // FPU
+    fpu
+    # (
+        .expWidth   ( expWidth   ),
+        .sigWidth   ( sigWidth   ),
+        .FLOAT_SIZE ( FLOAT_SIZE ),
+        .BYTE_WIDTH ( BYTE_WIDTH )
+    ) (
+        .clk     ( clk       ),
+        .rst     ( rst       ),
+        .ready   ( fpu_ready ),
+        .valid_i ( fpu_valid ),
+        .a       ( fpu_a     ),
+        .b       ( fpu_b     ),
+        .op      ( fpu_op    ),
+
+        .result  ( fpu_res   ),
+        .flags   ( fpu_flags ),
+        .valid_o ( fpu_valid )
+    );
 
 
-    // // rx fsm logic:
-    // // Read op -> read a -> read b -> wait fpu to complete -> send res
-    // always_comb 
-    // begin
-    //     next_state = state;
 
+    //------------------------------------------------------------------------
+    // FSM
 
-
-
-    //     case (state)
-    //     idle:      if (rx_data == SYMB_START)
-    //     read_op:   if (rx_data == SYMB_DELIM) next_state = read_a;
-    //     read_a:    if (rx_data == SYMB_DELIM) next_state = read_b;
-    //     read_b:    if (rx_data == SYMB_END)   next_state = calculate;
-    //     calculate: if (     fpu_valid       ) next_state = send_res;
-    //     send_res:  if (     rx_ready        ) next_state = idle;
-    //     endcase
-
-    // end
+    always_comb begin
+        case (state)
+        idle:      if ( rx_data == SYMB_START ) next_state = read_op;
+        read_op:   if ( rx_data == SYMB_DELIM ) next_state = read_a;
+        read_a:    if ( rx_data == SYMB_DELIM ) next_state = read_b;
+        read_b:    if ( rx_data == SYMB_END   ) next_state = calculate;
+        calculate: if (     fpu_valid         ) next_state = send_res;
+        send_res:  if (     rx_ready          ) next_state = idle;
+        endcase
+    end
     
 
 
