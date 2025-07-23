@@ -58,7 +58,7 @@ module top
 
     //------------------------------------------------------------------------
 
-    // assign led      = '0;
+    assign led      = '0;
     // assign abcdefgh = '0;
     // assign digit    = '0;
        assign vsync    = '0;
@@ -108,12 +108,17 @@ module top
     logic [  BYTE_WIDTH-1:0 ] tx_keep;
     logic                     tx_last;
 
-    logic                     read_cnt; // TODO: calculate real size
+    logic                     read_cnt; // TODO: calculate real size (for 64bits it works and it's okay i think)
 
     // FPU
-    logic [FLOAT_SIZE-1:0           ] fpu_a;
-    logic [FLOAT_SIZE-1:0           ] fpu_b;
-    logic [  FLOAT_SIZE-1:0         ] fpu_res;
+    logic [VAR_WIDTH:0][VAR_LENG:0]   fpu_a;
+    logic [VAR_WIDTH:0][VAR_LENG:0]   fpu_b;
+    logic [VAR_WIDTH:0][VAR_LENG:0]   fpu_res;
+
+    logic [  FLOAT_SIZE:0           ] fpu_a_flatten;
+    logic [  FLOAT_SIZE:0           ] fpu_b_flatten;
+    logic [  FLOAT_SIZE:0           ] fpu_res_flatten;
+
     logic [  BYTE_WIDTH:0           ] fpu_op;
     logic                             fpu_valid;
     logic                             fpu_ready;
@@ -154,7 +159,7 @@ module top
     );
     
     //------------------------------------------------------------------------
-
+    // DEBUG MOMENT
     seven_segment_display
     # (
         .w_digit   ( w_digit ),
@@ -197,22 +202,45 @@ module top
         begin
             if ( state == read_a)
             begin
-              fpu_a[(read_cnt+1)*8:read_cnt] <= rx_data;
+              fpu_a[read_cnt] <= rx_data;
               read_cnt <= read_cnt + 1'd1;
             end
             else if ( state == read_b  )
             begin
-              fpu_b[(read_cnt+1)*8:read_cnt] <= rx_data;
+              fpu_b[read_cnt] <= rx_data;
               read_cnt <= read_cnt + 1'd1;
             end
             else if ( state == read_op )
             begin
-              fpu_op[(read_cnt+1)*8:read_cnt] <= rx_data;
+              fpu_op[read_cnt] <= rx_data;
               read_cnt <= read_cnt + 1'd1;
             end
         end
     end
 
+    always_comb begin
+    // for ( i = 0; i < VAR_WIDTH; i = i + 1)
+    //     begin
+        fpu_a_flatten    [ 7:0   ] <= fpu_a[0];
+        fpu_a_flatten    [ 15:8  ] <= fpu_a[1];
+        fpu_a_flatten    [ 15:8  ] <= fpu_a[2];
+        fpu_a_flatten    [ 23:16 ] <= fpu_a[3];
+        fpu_a_flatten    [ 31:24 ] <= fpu_a[4];
+
+        fpu_b_flatten    [ 7:0   ] <= fpu_b[0];
+        fpu_b_flatten    [ 15:8  ] <= fpu_b[1];
+        fpu_b_flatten    [ 15:8  ] <= fpu_b[2];
+        fpu_b_flatten    [ 23:16 ] <= fpu_b[3];
+        fpu_b_flatten    [ 31:24 ] <= fpu_b[4];
+
+        fpu_res_flatten  [ 7:0   ] <= fpu_res[0];
+        fpu_res_flatten  [ 15:8  ] <= fpu_res[1];
+        fpu_res_flatten  [ 15:8  ] <= fpu_res[2];
+        fpu_res_flatten  [ 23:16 ] <= fpu_res[3];
+        fpu_res_flatten  [ 31:24 ] <= fpu_res[4];
+
+        // end
+    end
     //------------------------------------------------------------------------
     // FPU
     fpu
@@ -222,25 +250,23 @@ module top
         .FLOAT_SIZE ( FLOAT_SIZE ),
         .BYTE_WIDTH ( BYTE_WIDTH )
     ) (
-        .clk     ( clk       ),
-        .rst     ( rst       ),
-        .ready   ( fpu_ready ),
-        .valid_i ( fpu_valid ),
-        .a       ( fpu_a     ),
-        .b       ( fpu_b     ),
-        .op      ( fpu_op    ),
+        .a       ( fpu_a_flatten  ),
+        .b       ( fpu_b_flatten  ),
+        .op      ( fpu_op         ),
 
         .result  ( fpu_res   ),
         .flags   ( fpu_flags ),
-        .valid_o ( fpu_valid )
+        .valid_o ( fpu_valid ),
+
+        .clk     ( clk            ),        // All these field needed only for division only
+        .rst     ( rst            )
+        // .ready   ( fpu_ready      )
     );
-
-
 
     //------------------------------------------------------------------------
     // FSM
 
-    always_comb begin
+    always_ff @( posedge clk or posedge rst )  begin
         case (state)
         idle:      if ( rx_data == SYMB_START ) next_state = read_op;
         read_op:   if ( rx_data == SYMB_DELIM ) next_state = read_a;

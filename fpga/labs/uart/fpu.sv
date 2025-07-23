@@ -8,7 +8,7 @@ module fpu
 (
     input                    clk,
     input                    rst,
-    input                    ready,
+    // input                    ready,
     input [ FLOAT_SIZE-1:0 ] a,
     input [ FLOAT_SIZE-1:0 ] b,
     input [ 8*BYTE_WIDTH:0 ] op,
@@ -113,53 +113,51 @@ module fpu
 
 
 
-    always_comb begin
+    always_ff @( posedge clk or posedge rst ) begin
         case ( op )
         "*": 
         begin
-            result = result_mul;
-            flags  = flags_mul;
+            result   = result_mul;
+            flags    = flags_mul;
             valid_o  = '1;
         end
         "+":
         begin
-            result = result_add;
-            flags  = flags_add;
+            result   = result_add;
+            flags    = flags_add;
             valid_o  = '1;
         end
         "-":
         begin
-            result = result_sub;
-            flags  = flags_sub;
+            result   = result_sub;
+            flags    = flags_sub;
             valid_o  = '1;
         end
         "/":
         begin
-            result = result_div;
-            flags  = flags_div;
+            result   = result_div;
+            flags    = flags_div;
             valid_o  = '1;
         end
         ">":
         begin
-            result = result_comp_gt;
-            flags  = flags_comp;
+            result   = result_comp_gt;
+            flags    = flags_comp;
             valid_o  = '1;
         end
         "<":
         begin
-            result = result_comp_lt;
-            flags  = flags_comp;
+            result   = result_comp_lt;
+            flags    = flags_comp;
             valid_o  = '1;
         end
         "=":
         begin
-            result = result_comp_eq;
-            flags  = flags_comp;
+            result   = result_comp_eq;
+            flags    = flags_comp;
             valid_o  = '1;
         end
         endcase
-
-        
     end
 
 endmodule
