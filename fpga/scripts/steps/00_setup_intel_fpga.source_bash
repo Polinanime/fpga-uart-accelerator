@@ -413,6 +413,8 @@ setup_run_directory_for_fpga_synthesis_quartus ()
     rel_lab_dir=$(realpath      --relative-to="$dir" "$lab_dir")
 
     rel_uart_dir=$(realpath         --relative-to="$dir" "$uart_dir")
+    rel_float_dir=$(realpath         --relative-to="$dir" "$float_dir")
+    rel_float_dir=$(realpath         --relative-to="$dir" "$float_dir")
 
     #-------------------------------------------------------------------------
 
@@ -427,6 +429,8 @@ set_global_assignment -name SEARCH_PATH $rel_main_src_dir
 set_global_assignment -name SEARCH_PATH $rel_board_dir/$fpga_board
 set_global_assignment -name SEARCH_PATH $rel_lab_dir/common
 set_global_assignment -name SEARCH_PATH $rel_uart_dir/RTL
+set_global_assignment -name SEARCH_PATH $rel_float_dir/HardFloat-1/source
+set_global_assignment -name SEARCH_PATH $rel_float_dir/HardFloat-1/source/RISCV
 
 EOF
 

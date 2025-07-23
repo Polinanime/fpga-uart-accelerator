@@ -10,7 +10,7 @@ module top
               w_gpio     = 100,
     parameter BAUD_RATE  = 115200,
     parameter FIFO_EA    = 4,
-    parameter BYTE_WIDTH = 1,
+    parameter BYTE_WIDTH = 4,
     parameter SYMB_START = "<",
     parameter SYMB_DELIM = "|",
     parameter SYMB_END   = ">",
@@ -18,7 +18,8 @@ module top
     parameter sigWidth   = 24,
     parameter FLOAT_SIZE = expWidth + sigWidth,
     parameter VAR_WIDTH  = FLOAT_SIZE / (BYTE_WIDTH * 8),
-    parameter VAR_LENG   = FLOAT_SIZE / VAR_WIDTH
+    parameter VAR_LENG   = FLOAT_SIZE / VAR_WIDTH,
+    parameter VAR_WIDTH_W= $clog2(VAR_WIDTH) + 1
 )
 (
     input                        clk,
@@ -83,16 +84,7 @@ module top
     }
     fsm_state; 
 
-    fsm_state state, next_state;
-    logic fsm_en; 
-
-    always_ff @ ( posedge clk or posedge rst)
-    begin
-        if ( rst )
-            state <= read_op;
-        else if ( fsm_en )
-            state <= next_state;
-    end
+    fsm_state state, next_state; 
 
 
     // UART 
@@ -108,18 +100,18 @@ module top
     logic [  BYTE_WIDTH-1:0 ] tx_keep;
     logic                     tx_last;
 
-    logic                     read_cnt; // TODO: calculate real size (for 64bits it works and it's okay i think)
+    logic [ VAR_WIDTH_W-1:0 ] uart_cnt;
 
     // FPU
-    logic [VAR_WIDTH:0][VAR_LENG:0]   fpu_a;
-    logic [VAR_WIDTH:0][VAR_LENG:0]   fpu_b;
-    logic [VAR_WIDTH:0][VAR_LENG:0]   fpu_res;
+    logic [VAR_WIDTH-1:0][VAR_LENG-1:0]   fpu_a;
+    logic [VAR_WIDTH-1:0][VAR_LENG-1:0]   fpu_b;
+    logic [VAR_WIDTH-1:0][VAR_LENG-1:0]   fpu_res;
 
-    logic [  FLOAT_SIZE:0           ] fpu_a_flatten;
-    logic [  FLOAT_SIZE:0           ] fpu_b_flatten;
-    logic [  FLOAT_SIZE:0           ] fpu_res_flatten;
+    logic [  FLOAT_SIZE-1:0           ] fpu_a_flatten;
+    logic [  FLOAT_SIZE-1:0           ] fpu_b_flatten;
+    logic [  FLOAT_SIZE-1:0           ] fpu_res_d;
 
-    logic [  BYTE_WIDTH:0           ] fpu_op;
+    logic [  7:0                    ] fpu_op;
     logic                             fpu_valid;
     logic                             fpu_ready;
     logic [  7:0                    ] fpu_flags;
@@ -135,7 +127,7 @@ module top
         .rstn       ( ~rst        ),
         .clk        ( clk         ),
         .i_uart_rx  ( uart_rx     ),
-        .o_tready   ( tx_ready    ),
+        .o_tready   ( '1          ),
         .o_tvalid   ( rx_valid    ),
         .o_tdata    ( rx_data     ),
         .o_overflow ( rx_overflow )
@@ -144,15 +136,15 @@ module top
     // Uart send
     uart_tx # (
         .BAUD_RATE  ( BAUD_RATE  ),
-        .FIFO_EA    ( FIFO_EA    ),
-        .BYTE_WIDTH ( BYTE_WIDTH + 3 ),
+        .FIFO_EA    ( FIFO_EA/2  ),
+        .BYTE_WIDTH ( BYTE_WIDTH ),
         .STOP_BITS  ( 1          )
     ) tx (
         .rstn       ( ~rst      ),
         .clk        ( clk       ),
         .i_tready   ( tx_ready  ),
-        .i_tvalid   ( rx_valid  ),
-        .i_tdata    ( {"-", rx_data, "-\n"}),
+        .i_tvalid   ( fpu_valid ),
+        .i_tdata    ( fpu_res   ),
         .i_tkeep    ( 4'('1)    ),
         .i_tlast    ( '1        ),
         .o_uart_tx  ( uart_tx   )
@@ -165,8 +157,7 @@ module top
         .w_digit   ( w_digit ),
         .clk_mhz   ( clk_mhz ),
         .update_hz ( 4 ) // Looks like a sane default
-    )
-    (
+    ) inst_disp (
         .clk ( clk ),
         .rst ( rst ),
 
@@ -187,7 +178,6 @@ module top
     end
 
     //------------------------------------------------------------------------
-
     // Read numbers
 
     always_ff @( posedge clk or posedge rst ) 
@@ -200,47 +190,45 @@ module top
         end
         else if (rx_valid)
         begin
-            if ( state == read_a)
+            if ( state == read_a )
             begin
-              fpu_a[read_cnt] <= rx_data;
-              read_cnt <= read_cnt + 1'd1;
+              fpu_a[uart_cnt] <= rx_data;
             end
             else if ( state == read_b  )
             begin
-              fpu_b[read_cnt] <= rx_data;
-              read_cnt <= read_cnt + 1'd1;
+              fpu_b[uart_cnt] <= rx_data;
             end
             else if ( state == read_op )
             begin
-              fpu_op[read_cnt] <= rx_data;
-              read_cnt <= read_cnt + 1'd1;
+              fpu_op[uart_cnt] <= rx_data;
             end
         end
     end
 
-    always_comb begin
-    // for ( i = 0; i < VAR_WIDTH; i = i + 1)
-    //     begin
-        fpu_a_flatten    [ 7:0   ] <= fpu_a[0];
-        fpu_a_flatten    [ 15:8  ] <= fpu_a[1];
-        fpu_a_flatten    [ 15:8  ] <= fpu_a[2];
-        fpu_a_flatten    [ 23:16 ] <= fpu_a[3];
-        fpu_a_flatten    [ 31:24 ] <= fpu_a[4];
-
-        fpu_b_flatten    [ 7:0   ] <= fpu_b[0];
-        fpu_b_flatten    [ 15:8  ] <= fpu_b[1];
-        fpu_b_flatten    [ 15:8  ] <= fpu_b[2];
-        fpu_b_flatten    [ 23:16 ] <= fpu_b[3];
-        fpu_b_flatten    [ 31:24 ] <= fpu_b[4];
-
-        fpu_res_flatten  [ 7:0   ] <= fpu_res[0];
-        fpu_res_flatten  [ 15:8  ] <= fpu_res[1];
-        fpu_res_flatten  [ 15:8  ] <= fpu_res[2];
-        fpu_res_flatten  [ 23:16 ] <= fpu_res[3];
-        fpu_res_flatten  [ 31:24 ] <= fpu_res[4];
-
-        // end
+    always_ff @( posedge clk or posedge rst ) 
+    begin
+        if ( rst )
+        begin
+            uart_cnt <= '0;
+        end
+        else if (rx_valid)
+        begin
+            if ( rx_data == SYMB_DELIM | rx_data == SYMB_END )
+                uart_cnt <= '0;
+            else if ( state == read_a | state == read_b )
+                uart_cnt <= uart_cnt + 1'd1;
+        end
     end
+
+    generate
+        genvar i;
+        for ( i = 0; i < VAR_WIDTH; i = i + 1)
+        begin : flat_a_b
+            assign fpu_a_flatten [ ((i+1)*8-1) : (i*8) ] = fpu_a[i];
+            assign fpu_b_flatten [ ((i+1)*8-1) : (i*8) ] = fpu_b[i];
+        end
+    endgenerate
+
     //------------------------------------------------------------------------
     // FPU
     fpu
@@ -249,34 +237,59 @@ module top
         .sigWidth   ( sigWidth   ),
         .FLOAT_SIZE ( FLOAT_SIZE ),
         .BYTE_WIDTH ( BYTE_WIDTH )
-    ) (
+    ) inst_fpu (
         .a       ( fpu_a_flatten  ),
         .b       ( fpu_b_flatten  ),
         .op      ( fpu_op         ),
 
-        .result  ( fpu_res   ),
-        .flags   ( fpu_flags ),
-        .valid_o ( fpu_valid ),
+        .result  ( fpu_res_d      ),
+        .flags   ( fpu_flags      ),
+        .valid_o ( fpu_valid      )
 
-        .clk     ( clk            ),        // All these field needed only for division only
-        .rst     ( rst            )
+        // .clk     ( clk            ),        // All these field needed only for division only
+        // .rst     ( rst            )
         // .ready   ( fpu_ready      )
     );
+
+    always_ff @( posedge clk or posedge rst )  begin
+        if ( rst )
+            fpu_res <= '0;
+        else if ( fpu_valid )
+            fpu_res <= fpu_res_d;
+    end
+
+    //------------------------------------------------------------------------
+
+
+
+
 
     //------------------------------------------------------------------------
     // FSM
 
-    always_ff @( posedge clk or posedge rst )  begin
+    always_comb begin
+        next_state = state;
+
         case (state)
         idle:      if ( rx_data == SYMB_START ) next_state = read_op;
         read_op:   if ( rx_data == SYMB_DELIM ) next_state = read_a;
         read_a:    if ( rx_data == SYMB_DELIM ) next_state = read_b;
         read_b:    if ( rx_data == SYMB_END   ) next_state = calculate;
         calculate: if (     fpu_valid         ) next_state = send_res;
-        send_res:  if (     rx_ready          ) next_state = idle;
+        send_res:  if (     tx_ready          ) next_state = idle;
         endcase
     end
     
+
+    always_ff @ ( posedge clk or posedge rst)
+    begin
+        if ( rst )
+            state <= idle;
+        else
+        begin
+            state <= next_state;
+        end
+    end
 
 
 endmodule

@@ -6,16 +6,16 @@ module fpu
     parameter BYTE_WIDTH = 1
 )
 (
-    input                    clk,
-    input                    rst,
+    // input                    clk,
+    // input                    rst,
     // input                    ready,
     input [ FLOAT_SIZE-1:0 ] a,
     input [ FLOAT_SIZE-1:0 ] b,
-    input [ 8*BYTE_WIDTH:0 ] op,
+    input [ 8*BYTE_WIDTH-1:0 ] op,
 
     output [FLOAT_SIZE-1:0 ] result,
     output [7:0            ] flags,
-    output                   valid_o
+    output                   valid_o    
 );
     logic [ FLOAT_SIZE-1:0 ] result_add;
     logic [ FLOAT_SIZE-1:0 ] result_mul;
@@ -41,7 +41,6 @@ module fpu
         .control        ( '0               ),  // (a*b)
         .a              ( a                ),
         .b              ( b                ),
-        .c              ( '0               ),
         .roundingMode   ( `round_near_even ),
         .out            ( result_mul       ),
         .exceptionFlags ( flags_mul        )
@@ -52,7 +51,7 @@ module fpu
         .sigWidth ( sigWidth )
     ) add (
         .control        ( '0               ),
-        .op             ( '0               ),   // a+b
+        .subOp          ( '0               ),   // a+b
         .a              ( a                ),
         .b              ( b                ),
         .roundingMode   ( `round_near_even ),
@@ -66,7 +65,7 @@ module fpu
         .sigWidth ( sigWidth )
     ) sub (
         .control        ( '0               ),
-        .op             ( '1               ),   // a-b
+        .subOp          ( '1               ),   // a-b
         .a              ( a                ),
         .b              ( b                ),
         .roundingMode   ( `round_near_even ),
@@ -78,7 +77,6 @@ module fpu
         .expWidth ( expWidth ),
         .sigWidth ( sigWidth )
     ) copm (
-        .control        ( '0               ),
         .a              ( a                ),
         .b              ( b                ),
         .lt             ( result_comp_lt   ),   // a<b
@@ -113,7 +111,11 @@ module fpu
 
 
 
-    always_ff @( posedge clk or posedge rst ) begin
+    always_comb begin
+        result      = '0;
+        flags       = '0;
+        valid_o     = '0;
+
         case ( op )
         "*": 
         begin

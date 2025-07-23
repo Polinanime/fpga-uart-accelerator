@@ -39,6 +39,9 @@ lab_dir="$package_dir/labs"
 script_dir="$package_dir/scripts"
 
 uart_dir="$package_dir/../FPGA-UART"
+float_dir="$package_dir/../HardFloat"
+float_dir_one="$package_dir/../HardFloat"
+
 
 #-----------------------------------------------------------------------------
 
