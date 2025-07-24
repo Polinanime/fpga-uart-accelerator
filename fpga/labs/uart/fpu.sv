@@ -34,6 +34,17 @@ module fpu
     logic        [7:0] flags_comp;
     logic        [7:0] flags_div;
 
+
+    // assign result_add     = (a + b);
+    // assign result_sub     = (a - b);
+    // assign result_mul     = (a * b);
+    // assign result_comp_gt = (a > b);
+    // assign result_comp_lt = (a < b);
+    // assign result_comp_eq = (a == b);
+
+
+
+
     mulRecFN # (
         .expWidth ( expWidth ),
         .sigWidth ( sigWidth )
@@ -58,7 +69,6 @@ module fpu
         .out            ( result_add       ),
         .exceptionFlags ( flags_add        )
     );
-
 
     addRecFN # (
         .expWidth ( expWidth ),

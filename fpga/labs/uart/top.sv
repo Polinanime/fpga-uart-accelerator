@@ -91,7 +91,7 @@ module top
     logic [15:0             ] cnt;
     logic                     rx_ready;
     logic                     rx_valid;
-    logic [ 7:0]              rx_data;
+    logic [ 7:0            ]  rx_data;
     logic                     rx_overflow;
     logic                     rx_symbol;
     logic                     tx_ready;
@@ -200,7 +200,7 @@ module top
             end
             else if ( state == read_op )
             begin
-              fpu_op[uart_cnt] <= rx_data;
+              fpu_op <= rx_data;
             end
         end
     end
