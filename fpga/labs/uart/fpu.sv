@@ -35,7 +35,7 @@ module fpu
     logic        [7:0] flags_div;
 
 
-    // assign result_add     = (a + b);
+    assign result_add     = (a + b);
     // assign result_sub     = (a - b);
     // assign result_mul     = (a * b);
     // assign result_comp_gt = (a > b);
@@ -45,30 +45,30 @@ module fpu
 
 
 
-    mulRecFN # (
-        .expWidth ( expWidth ),
-        .sigWidth ( sigWidth )
-    ) mul (
-        .control        ( '0               ),  // (a*b)
-        .a              ( a                ),
-        .b              ( b                ),
-        .roundingMode   ( `round_near_even ),
-        .out            ( result_mul       ),
-        .exceptionFlags ( flags_mul        )
-    );
+    // mulRecFN # (
+    //     .expWidth ( expWidth ),
+    //     .sigWidth ( sigWidth )
+    // ) mul (
+    //     .control        ( '0               ),  // (a*b)
+    //     .a              ( a                ),
+    //     .b              ( b                ),
+    //     .roundingMode   ( `round_near_even ),
+    //     .out            ( result_mul       ),
+    //     .exceptionFlags ( flags_mul        )
+    // );
 
-    addRecFN # (
-        .expWidth ( expWidth ),
-        .sigWidth ( sigWidth )
-    ) add (
-        .control        ( '0               ),
-        .subOp          ( '0               ),   // a+b
-        .a              ( a                ),
-        .b              ( b                ),
-        .roundingMode   ( `round_near_even ),
-        .out            ( result_add       ),
-        .exceptionFlags ( flags_add        )
-    );
+    // addRecFN # (
+    //     .expWidth ( expWidth ),
+    //     .sigWidth ( sigWidth )
+    // ) add (
+    //     .control        ( '0               ),
+    //     .subOp          ( '0               ),   // a+b
+    //     .a              ( a                ),
+    //     .b              ( b                ),
+    //     .roundingMode   ( `round_near_even ),
+    //     .out            ( result_add       ),
+    //     .exceptionFlags ( flags_add        )
+    // );
 
     addRecFN # (
         .expWidth ( expWidth ),
@@ -83,18 +83,18 @@ module fpu
         .exceptionFlags ( flags_sub        )
     );
 
-    compareRecFN # (
-        .expWidth ( expWidth ),
-        .sigWidth ( sigWidth )
-    ) copm (
-        .a              ( a                ),
-        .b              ( b                ),
-        .lt             ( result_comp_lt   ),   // a<b
-        .eq             ( result_comp_eq   ),   // a=b
-        .gt             ( result_comp_rt   ),   // a>b
-        .unordered      ( result_comp_un   ),   // a=NaN | b=NaN
-        .exceptionFlags ( flags_comp       )
-    );
+    // compareRecFN # (
+    //     .expWidth ( expWidth ),
+    //     .sigWidth ( sigWidth )
+    // ) copm (
+    //     .a              ( a                ),
+    //     .b              ( b                ),
+    //     .lt             ( result_comp_lt   ),   // a<b
+    //     .eq             ( result_comp_eq   ),   // a=b
+    //     .gt             ( result_comp_rt   ),   // a>b
+    //     .unordered      ( result_comp_un   ),   // a=NaN | b=NaN
+    //     .exceptionFlags ( flags_comp       )
+    // );
 
 
     // TODO: IMPLEMENT DIVISION 

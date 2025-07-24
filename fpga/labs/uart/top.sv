@@ -2,24 +2,25 @@
 
 module top
 # (
-    parameter clk_mhz    = 50,
-              w_key      = 4,
-              w_sw       = 8,
-              w_led      = 8,
-              w_digit    = 8,
-              w_gpio     = 100,
-    parameter BAUD_RATE  = 115200,
-    parameter FIFO_EA    = 4,
-    parameter BYTE_WIDTH = 4,
-    parameter SYMB_START = "<",
-    parameter SYMB_DELIM = "|",
-    parameter SYMB_END   = ">",
-    parameter expWidth   = 8,
-    parameter sigWidth   = 24,
-    parameter FLOAT_SIZE = expWidth + sigWidth,
-    parameter VAR_WIDTH  = FLOAT_SIZE / (BYTE_WIDTH * 8),
-    parameter VAR_LENG   = FLOAT_SIZE / VAR_WIDTH,
-    parameter VAR_WIDTH_W= $clog2(VAR_WIDTH) + 1
+    parameter clk_mhz      = 50,
+              w_key        = 4,
+              w_sw         = 8,
+              w_led        = 8,
+              w_digit      = 8,
+              w_gpio       = 100,
+    parameter BAUD_RATE    = 115200,
+    parameter FIFO_EA      = 4,
+    parameter BYTE_WIDTH   = 4,
+    parameter SYMB_START   = "<",
+    parameter SYMB_DELIM_A = "|",
+    parameter SYMB_DELIM_B = "/",
+    parameter SYMB_END     = ">",
+    parameter expWidth     = 8,
+    parameter sigWidth     = 24,
+    parameter FLOAT_SIZE   = expWidth + sigWidth,
+    parameter VAR_WIDTH    = FLOAT_SIZE / 8,
+    parameter VAR_LENG     = FLOAT_SIZE / VAR_WIDTH,
+    parameter VAR_WIDTH_W  = $clog2(VAR_WIDTH) + 1
 )
 (
     input                        clk,
@@ -59,7 +60,7 @@ module top
 
     //------------------------------------------------------------------------
 
-    assign led      = '0;
+    // assign led      = '0;
     // assign abcdefgh = '0;
     // assign digit    = '0;
        assign vsync    = '0;
@@ -116,9 +117,6 @@ module top
     logic                             fpu_ready;
     logic [  7:0                    ] fpu_flags;
 
-    // Some test data to send
-    assign tx_data = 'd31;
-
     // Uart receive
     uart_rx # (
         .BAUD_RATE  (BAUD_RATE  ),
@@ -137,15 +135,15 @@ module top
     uart_tx # (
         .BAUD_RATE  ( BAUD_RATE  ),
         .FIFO_EA    ( FIFO_EA/2  ),
-        .BYTE_WIDTH ( BYTE_WIDTH ),
+        .BYTE_WIDTH ( BYTE_WIDTH + 2 ),
         .STOP_BITS  ( 1          )
     ) tx (
         .rstn       ( ~rst      ),
         .clk        ( clk       ),
         .i_tready   ( tx_ready  ),
-        .i_tvalid   ( fpu_valid ),
-        .i_tdata    ( fpu_res   ),
-        .i_tkeep    ( 4'('1)    ),
+        .i_tvalid   ( state == calculate  ),
+        .i_tdata    ( {SYMB_START, fpu_res, SYMB_END} ),
+        .i_tkeep    ( 12'('1)    ),
         .i_tlast    ( '1        ),
         .o_uart_tx  ( uart_tx   )
     );
@@ -188,6 +186,12 @@ module top
             fpu_b <= '0;
             fpu_op <= '0;
         end
+        // else if ( (state == idle) )
+        // begin
+        //     fpu_a <= '0;
+        //     fpu_b <= '0;
+        //     fpu_op <= '0;
+        // end
         else if (rx_valid)
         begin
             if ( state == read_a )
@@ -213,9 +217,9 @@ module top
         end
         else if (rx_valid)
         begin
-            if ( rx_data == SYMB_DELIM | rx_data == SYMB_END )
+            if ( (rx_data == SYMB_DELIM_A) | (rx_data == SYMB_DELIM_B) | (rx_data == SYMB_END) )
                 uart_cnt <= '0;
-            else if ( state == read_a | state == read_b )
+            else if ( (state == read_a) | (state == read_b) )
                 uart_cnt <= uart_cnt + 1'd1;
         end
     end
@@ -243,26 +247,38 @@ module top
         .op      ( fpu_op         ),
 
         .result  ( fpu_res_d      ),
-        .flags   ( fpu_flags      ),
-        .valid_o ( fpu_valid      )
+        .flags   ( fpu_flags      )
+        // .valid_o ( fpu_valid      )
 
         // .clk     ( clk            ),        // All these field needed only for division only
         // .rst     ( rst            )
         // .ready   ( fpu_ready      )
     );
 
+    assign fpu_valid = '1;
+
     always_ff @( posedge clk or posedge rst )  begin
-        if ( rst )
+        if ( rst ) begin
             fpu_res <= '0;
-        else if ( fpu_valid )
+        end
+        else if ( fpu_valid ) begin
             fpu_res <= fpu_res_d;
+        end
     end
 
     //------------------------------------------------------------------------
 
+    assign led[0] = state == idle;
+    assign led[1] = (state == read_a) | (state == read_b) | (state == read_op);
+    assign led[2] = state == calculate;
+    assign led[3] = state == send_res;
 
+    // assign led[0] = state == read_op;
+    // assign led[1] = state == read_a;
+    // assign led[2] = state == read_b;
+    // assign led[3] =
 
-
+    // assign led = uart_cnt;
 
     //------------------------------------------------------------------------
     // FSM
@@ -272,8 +288,8 @@ module top
 
         case (state)
         idle:      if ( rx_data == SYMB_START ) next_state = read_op;
-        read_op:   if ( rx_data == SYMB_DELIM ) next_state = read_a;
-        read_a:    if ( rx_data == SYMB_DELIM ) next_state = read_b;
+        read_op:   if ( rx_data == SYMB_DELIM_A ) next_state = read_a;
+        read_a:    if ( rx_data == SYMB_DELIM_B ) next_state = read_b;
         read_b:    if ( rx_data == SYMB_END   ) next_state = calculate;
         calculate: if (     fpu_valid         ) next_state = send_res;
         send_res:  if (     tx_ready          ) next_state = idle;
